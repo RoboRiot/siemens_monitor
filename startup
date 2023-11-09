@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#
+
+# test if the screen session 'rdu' is running yet
+
+clear
+sudo bash -x ./findMSUP
+sleep 1
+echo 
+now=$(date +"%Y.%m.%d %H.%M.%S")
+echo $now 'tripwire started'
+sudo bash -x ./rdu

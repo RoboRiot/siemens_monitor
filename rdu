@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# Check if portsettings.ini exists
+if [ -f "portsettings.ini" ]; then
+    portsettings=$(cat "portsettings.ini")
+
+    if [[ $portsettings == *'10K MSUP'* ]]; then
+        msupType="1"
+    else
+        msupType="2"
+    fi
+else
+    echo "Starting port detection..."
+    ./portdetect
+fi
+
+# Check if the screen session 'rdu' is running
+output=$(ps aux | grep '[S]CREEN -dmS rdu')
+set -- $output
+
+if [ -n "$output" ]; then
+    # Echo timestamp to logfile
+    now=$(date '+%Y.%m.%d %H.%M.%S')
+    echo "$now reporting"
+
+    # Write the log file
+    log=$(date '+%Y.%m.%d.%H.%M').log
+    touch "$log"
+    screen -S rdu -X hardcopy "$log"
+
+    # Dump to server
+    echo "$now Verifying Magnet Supervisory log file..."
+    sleep 2
+    logfile=$(cat "$log")
+    rduid=$(cat "rduid")
+    vLog=$(expr "$logfile" : '.*He Parameters')
+    sleep 1
+
+    if [ "$vLog" -gt 1 ]; then
+        echo "$now Everything checks out here, uploading to server now.."
+        curl -F "file=@${log}" -F "rduId=${rduid}" -F "type=${msupType}" http://davinci2.coolpair.com/input.php
+        now=$(date '+%Y.%m.%d %H.%M.%S')
+        echo "$now file upload complete"
+        exit
+    else
+        echo 'Invalid log file... trying screen dumping again'
+        chlog=$(expr "$logfile" : '.*Run process display')
+        sleep 1
+        if [ "$chlog" -gt 1 ]; then
+            screen -S rdu -X -p 0 stuff $'\n\nR\n\n' # get us into the monitor
+            echo 'MSUP still in command menu state, attempting to get into monitor mode.'
+            sleep 10
+        fi
+
+        for ri in {1..5}; do
+            rm *.log
+            screen -S rdu -X hardcopy "$log"
+            sleep 2
+            logfile=$(cat "$log")
+            sleep 1
+            vLog=$(expr "$logfile" : '.*He Parameters')
+            if [ "$vLog" -gt 1 ]; then
+                echo "$now Everything checks out here, uploading to server now.."
+                curl -F "file=@${log}" -F "rduId=${rduid}" -F "type=${msupType}" http://davinci2.coolpair.com/input.php
+                now=$(date '+%Y.%m.%d %H.%M.%S')
+                echo "$now file upload complete"
+                exit
+            else
+                echo "Log still invalid on attempt $ri"
+            fi
+        done
+
+        # Bad log file, report this to the server as a failed attempt, then run startup script to correct this
+        curl -F "rduId=${rduid}" -F "type=-1" http://davinci2.coolpair.com/input.php
+        now=$(date '+%Y.%m.%d %H.%M.%S')
+        echo "$now failed"
+        echo "Running startup script to fix our connection to the MSUP"
+        screen -S rdu -p 0 -X quit
+        ./startup
+        echo "$now invalid log file" >> 'errorlog.txt'
+        exit
+    fi
+else
+    # No screen session found, running startup script
+    rduid=$(cat "rduid")
+    curl -F "rduId=${rduid}" -F "type=-1" http://davinci2.coolpair.com/input.php
+    now=$(date '+%Y.%m.%d %H.%M.%S')
+    echo "$now no screen session started"
+    echo "Running startup script to fix our connection to the MSUP"
+    ./startup
+    echo "$now Cannot find screen session" >> 'errorlog.txt'
+    exit
+fi

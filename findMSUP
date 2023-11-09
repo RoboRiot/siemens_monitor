@@ -1,0 +1,148 @@
+#!/bin/bash
+clear
+#--------------------------------------------
+#Manuafactor ID for prolific
+manid="ID 0403:6001"
+usblist=$(lsusb)
+#Count from USB list, get total number of USB serial adapters by Manuafactor ID & Model
+#Match up manid only, send total count to totaldev 
+totaldev=$(grep -o "$manid" <<< "$usblist" | wc -l)
+totaldev=$(($totaldev - 1))
+
+for iUSB in $(seq 0 $totaldev)
+   do
+    echo "Testing .... ttyUSBs"
+
+
+	
+	
+#Extract BuadRate settings from portsettings.ini by $iUSB 		
+#------------------------
+portsettings=$(cat "portsettings.ini")
+echo $portsettings
+TargetPort="ttyUSB"$iUSB
+
+        if [[ $portsettings == *$TargetPort* ]]
+        then
+			FindTarget=`expr match "$portsettings" '.*'"$TargetPort"' '`
+			TargetSubString=${portsettings:$FindTarget}
+			FindEndbRate=`expr index "$TargetSubString" '-'`
+			bRate=${TargetSubString:0:$FindEndbRate - 1}
+			echo $bRate
+		else #------------Run Port settings to scan for buadrate and storein port settings
+        rm "portsettings.ini"
+		./portdetect
+			portsettings=$(cat "portsettings.ini")
+			echo $portsettings
+			TargetPort="ttyUSB"$iUSB
+				if [[ $portsettings == *$TargetPort* ]]
+				then
+				FindTarget=`expr match "$portsettings" '.*'"$TargetPort"' '`
+				TargetSubString=${portsettings:$FindTarget}
+				FindEndbRate=`expr index "$TargetSubString" '-'`
+				bRate=${TargetSubString:0:$FindEndbRate - 1}
+				echo $bRate
+				fi
+		fi	
+
+#----------------------------------------------------------
+
+	
+	
+	output=`ps -aux|grep 'SCREEN -dmS rdu*'|grep -v grep`
+set -- $output
+#echo $output
+if (($# == 0))
+  then
+echo
+    now=$(date +"%Y.%m.%d %H.%M.%S")
+    echo $now 'no existing SCREEN session started.  Starting screen @ ttyUSB'$iUSB
+#-------------------------------------------
+    screen -dmS rdu /dev/ttyUSB$iUSB $bRate # has to be  detached or we get into limbo trying to dump shell commands into an MSUP window
+    echo
+fi
+sleep 1
+currentPortline=`ps -aux|grep 'SCREEN -dmS rdu*'|grep -v grep`
+set -- $currentPortline
+
+#echo $currentPortline
+
+ttypos=`expr "$currentPortline" : '.*ttyUSB'`
+
+currpos=${currentPortline:$ttypos - 6:8}
+echo "currently verifying a screen session on "$currpos
+
+        for cmsup in {5..0}
+           do
+            echo -ne "Please wait connecting to MSUP.."$cmsup '\r'
+            sleep 1
+        done
+
+
+    screen -S rdu -X -p 0 stuff '\033\n\n' # ESC to get into the main menu
+    echo
+         for i in {5..0}
+           do
+           echo -ne "preparing MSUP.  please wait..."$i '\r'
+           sleep 1
+           done
+
+  for i in {4..0}
+           do
+           rm "msupmenu2.log"
+           echo -ne "Searching for command menu.  please wait..."$i '\r'
+           screen -S rdu -X hardcopy "msupmenu2.log"
+           sleep 1
+           logfile2=$(cat "msupmenu2.log")
+           if [[ $logfile2 == *"Command:"* ]]
+            then
+              rm "msupmenu2.log"
+               break
+           fi
+           screen -S rdu -X -p 0 stuff '\033\n\n' # ESC to get into the main menu
+          echo "Waiting to draw command menu"
+           sleep 5
+done
+
+
+#We will now dump to file so we can verify if this is
+#the correct Serial connetion to the MSUP.  We will move on if it is.
+    screen -S rdu -X hardcopy "msupmenu.log"
+      logfile=$(cat "msupmenu.log")
+      if [[ $logfile == *"Command:"* ]]
+        then
+        rm "msupmenu.log"
+echo
+        echo "MSUP found on "$currpos" getting us to monitoring mode"
+        screen -S rdu -X -p 0 stuff 'R\n\n' # get us into the monitor
+        echo
+       for i in {3..0}
+          do
+          echo -ne "Still getting into monitoring mode..."$i '\r'
+          sleep 1
+       done
+
+       screen -S rdu -X -p 0 stuff '\n\nR\n\n' # get us into the monitor
+       echo
+
+        for i in {15..0}
+        do
+        echo -ne "Still WAITING to get into monitoring mode..."$i '\r'
+        sleep 1
+        done
+echo
+        rm "msupport.ini"
+        echo $currpos >> 'msupport.ini'
+echo "MSUP found connected to "$currpos" awaiting next instruction."
+break
+        else
+echo "MSUP not found on ttyUSB"$iUSB "trying next port"
+echo "but first we will kill the screen session loaded"
+screen -S rdu -p 0 -X quit
+sleep 2
+screen -ls
+
+fi
+
+done
+

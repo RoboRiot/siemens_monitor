@@ -1,0 +1,114 @@
+#!/bin/bash
+clear
+
+# Check if the script is run as root
+if [ "$EUID" -ne 0 ]; then 
+  echo "Please run as root"
+  exit
+fi
+
+# Remove the existing portsettings.ini if it exists
+if [ -f "portsettings.ini" ]; then
+    rm "portsettings.ini"
+fi
+
+# Initialize DTW
+DTW=""
+
+# map ttyUSB name only
+for i in /sys/bus/usb/devices/*/ttyUSB*; do
+    # Check if ttyUSB path exists
+    if [[ -e "$i" ]]; then
+        usbtty="${i##*/}"
+        msupflag="0"
+        modalias="$(cat "$i"/../modalias)"
+
+        # Check for specific USB device using the correct modalias values
+        if echo "$modalias" | egrep -iq "v0403p6001"; then
+
+            # Kill existing screen sessions
+            while read -r pid; do
+                if [[ $pid ]]; then
+                    kill "$pid" && echo "Killed process $pid" || echo "Failed to kill process $pid"
+                fi
+            done < <(pgrep -f "SCREEN .* $usbtty")
+
+            sleep 2
+
+            # Start a new screen session with the USB device and the correct baud rate
+            rduname="${usbtty}_rdu"
+            sudo screen -dmS "$rduname" /dev/"$usbtty" 9600 && echo "Started screen session $rduname" || echo "Failed to start screen session $rduname"
+            echo "Working with session $rduname on port $usbtty"
+
+            # Debug: List active screen sessions
+            screen -ls
+
+            # Wait for a moment for the device to be ready
+            for cmsup in {5..0}; do
+                echo -ne "Please wait connecting to MSUP..$cmsup" '\r'
+                sleep 1
+            done
+
+            # Check if screen session is running
+            if pgrep -f "SCREEN -dmS $rduname" > /dev/null; then
+                screen -S "$rduname" -X stuff $'\033\n\n'
+                sleep 5
+
+                # Prepare MSUP and capture the screen output
+                screen -S "$rduname" -X hardcopy /home/mack2356/Documents/AIS/Projects/SourceCode/msupmenu2.log
+                sleep 1 # Wait a bit for the hardcopy to be sure it's done
+                sudo screen -ls
+
+                # Debug: Check for errors after hardcopy command
+                if [ $? -eq 0 ]; then
+                    echo "Hardcopy operation was successful."
+                else
+                    echo "Hardcopy operation failed."
+                fi
+
+                # Check if hardcopy file was created
+                if [ -f /home/mack2356/Documents/AIS/Projects/SourceCode/msupmenu2.log ]; then
+                    echo "Hardcopy file exists."
+                    logfile2=$(< /home/mack2356/Documents/AIS/Projects/SourceCode/msupmenu2.log)
+                else
+                    echo "Hardcopy file does not exist. There might be an issue with the screen buffer or the session."
+                    continue
+                fi
+
+                if [[ $logfile2 == *"Command:"* ]]; then
+                    msupflag="1"
+                    rm /home/mack2356/Documents/AIS/Projects/SourceCode/msupmenu2.log
+                fi
+
+                # Kill the screen session after use
+                screen -S "$rduname" -X quit
+                sleep 1 # Allow some time for the session to close
+
+                # Debug: Ensure the screen session is killed
+                if ! pgrep -f "SCREEN -dmS $rduname" > /dev/null; then
+                    echo "Screen session $rduname has been terminated."
+                else
+                    echo "Failed to terminate screen session $rduname."
+                fi
+            else
+                echo "Screen session $rduname did not start properly."
+            fi
+
+            # Create output based on the flag
+            if [[ $msupflag == "1" ]]; then
+                DTW+="$usbtty 9600 - 4K MSUP\n"
+            else
+                DTW+="$usbtty invalid MSUP communication\n"
+            fi
+        else
+            echo "Device $usbtty does not match the target modalias."
+        fi
+    else
+        echo "No USB tty devices found."
+    fi
+done
+
+# Save the results to portsettings.ini
+echo -e "$DTW" > "portsettings.ini"
+
+# Additional debug: Output

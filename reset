@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+# 2014.12.22 written (crw)
+#
+
+# clear out any leftover logfiles
+
+rm -rf ~/*.log
+
+# test if the screen session 'rdu' is running yet
+
+output=`ps -aux|grep 'SCREEN -dmS rdu /dev/ttyUSB*'|grep -v grep`
+set -- $output
+kill -9 $2
+screen -wipe
