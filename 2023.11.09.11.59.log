@@ -1,0 +1,24 @@
+
+ Magnet Supervisory  "551-360 VA08P 23/06/17"
+ OR0105-1 0105 Field current 000.00A 06:06:58 10-Nov-23
+ Supervisory Time: 02:00:00 LVQD: Waiting Trigger
+ MSUP S/N 00006473 Rev 0002 Magnet S/N 52581 Rev 0000
+ He Parameters   0%  100% ALRM%  WARN%  LEVEL1 LEVEL2
+ Values         306  002  30 40  50 70  S/C    S/C
+ He: HE ALARM                  EIS: OFF
+                         Self Test: PASS
+ Battery: LOAD ALARM            SH: OFF
+   Volts  00.00          Press HTR: ON  50%  A
+                        Compressor: OFF
+ Cold Head Sensor1:27.3K
+ Shield    Sensor1:27.3K   Sensor2:27.3K   OK
+ Turret    Sensor1:6.6K    Sensor2:6.6K    ALARM
+ Carbon R  Sensor1:3571R   Sensor2:3571R   ALARM
+ Carbon R  Sensor3:3571R   Sensor4:3571R   ALARM
+ SwtHtr       Res1:266.0R                  ALARM
+ QuhHtr       Res1:52.6R      Res2:52.6R   ALARM
+ Mag psiA         :13.50                   ALARM
+ Average Power    :0.000W                  OK
+ ERDU      Buttons: 0.46  TOO FEW BUTTONS
+ Tests:  Alarmbox Communications Fault.
+
